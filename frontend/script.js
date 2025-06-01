@@ -8,9 +8,6 @@ const dataContainer = document.getElementById('dataContainer');
 // 버튼이 클릭되었을 때 실행될 함수를 정의합니다.
 fetchDataButton.addEventListener('click', async () => {
     try {
-        // 백엔드의 /api/data 엔드포인트로 GET 요청을 보냅니다.
-        // 지금은 백엔드 서버가 http://localhost:3001 에서 실행 중이라고 가정합니다.
-        // 나중에 Docker Compose를 사용하면 이 주소가 변경될 수 있습니다.
         const response = await fetch('http://localhost:3001/api/data');
 
         // 응답이 성공적이지 않으면 오류를 발생시킵니다.

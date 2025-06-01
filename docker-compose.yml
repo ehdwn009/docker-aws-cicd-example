@@ -1,55 +1,41 @@
 # docker-aws-cicd-example/docker-compose.yml
 
-version: '3.8' # Docker Compose 파일 형식 버전을 지정합니다. 최신 버전을 사용하는 것이 좋습니다.
+version: '3.8' 
 
 services:
   # 백엔드 서비스 설정
   backend:
-    build: ./backend # ./backend 폴더의 Dockerfile을 사용하여 이미지를 빌드합니다.
+    build: ./backend # 
     ports:
-      - "3001:3001" # 호스트의 3001번 포트와 컨테이너의 3001번 포트를 연결합니다.
-    environment: # 백엔드 컨테이너 내부에서 사용할 환경 변수입니다.
-      # 나중에 데이터베이스 연결 정보를 여기에 추가할 것입니다.
-      # 예: DB_HOST=db
-      #     DB_USER=exampleuser
-      #     DB_PASSWORD=examplepass
-      #     DB_NAME=exampledb
-      NODE_ENV: development # Node.js 환경을 개발 모드로 설정 (선택 사항)
-    volumes: # 볼륨 마운트 (선택 사항, 개발 시 코드 변경 즉시 반영)
-      - ./backend:/app # 호스트의 ./backend 폴더를 컨테이너의 /app 폴더와 동기화합니다.
-      - /app/node_modules # node_modules는 호스트와 동기화하지 않도록 예외 처리 (컨테이너 내부 것 사용)
+      - "3001:3001" 
+    environment:
+      NODE_ENV: development
+    volumes:
+      - ./backend:/app 
+      - /app/node_modules 
     depends_on: # 의존성 설정
-      - db # 'db' 서비스가 시작된 후에 'backend' 서비스가 시작됩니다.
+      - db 
 
   # 프론트엔드 서비스 설정
   frontend:
-    build: ./frontend # ./frontend 폴더의 Dockerfile을 사용하여 이미지를 빌드합니다.
+    build: ./frontend 
     ports:
-      - "8080:80" # 호스트의 8080번 포트와 컨테이너의 80번 포트(Nginx 기본 포트)를 연결합니다.
-    depends_on: # 의존성 설정
-      - backend # 'backend' 서비스가 시작된 후에 'frontend' 서비스가 시작됩니다.
+      - "8080:80" 
+    depends_on: 
+      - backend 
 
   # 데이터베이스 서비스 설정 (PostgreSQL)
   db:
-    image: postgres:15-alpine # Docker Hub의 공식 PostgreSQL 이미지 (15-alpine 버전)를 사용합니다.
+    image: postgres:15-alpine 
     ports:
-      # 호스트의 5432 포트를 컨테이너의 5432 포트(PostgreSQL 기본 포트)와 연결합니다.
-      # 로컬에서 psql 같은 DB 클라이언트로 직접 접속하려면 필요합니다.
-      # 백엔드에서만 접속한다면 생략해도 무방합니다.
       - "5432:5432"
-    environment: # PostgreSQL 컨테이너를 설정하기 위한 환경 변수입니다.
-      POSTGRES_USER: exampleuser # 데이터베이스 사용자 이름을 설정합니다. 원하는 이름으로 변경 가능.
-      POSTGRES_PASSWORD: examplepass # 데이터베이스 사용자 비밀번호를 설정합니다. 원하는 값으로 변경.
-      POSTGRES_DB: exampledb # 생성할 데이터베이스 이름을 설정합니다. 원하는 이름으로 변경 가능.
-      # 주의: 실제 프로덕션 환경이나 공개 리포지토리에는 이렇게 비밀번호를 직접 적으면 안 됩니다!
-      #       지금은 로컬 개발 편의성을 위해 사용하며, 나중에 AWS Secrets Manager 등으로 관리합니다.
+    environment: 
+      POSTGRES_USER: exampleuser 
+      POSTGRES_PASSWORD: examplepass 
+      POSTGRES_DB: exampledb
     volumes:
-      # 데이터베이스 데이터를 영속적으로 저장하기 위한 볼륨 설정입니다.
-      # 'postgres_data'라는 이름의 볼륨을 컨테이너의 /var/lib/postgresql/data 경로에 연결합니다.
-      # 이렇게 하면 컨테이너가 삭제되거나 재생성되어도 데이터가 보존됩니다.
       - postgres_data:/var/lib/postgresql/data
 
 volumes:
-  # 위에서 db 서비스가 사용하는 'postgres_data' 볼륨을 정의합니다.
   postgres_data:
-    driver: local # 로컬 드라이버를 사용합니다.
+    driver: local 
