@@ -1,0 +1,68 @@
+# .github/workflows/main.yml
+
+name: CI/CD Pipeline - Build and Push to ECR
+
+# 1. 워크플로 실행 조건 정의
+on:
+  push:
+    branches: [ main ] # 'main' 브랜치에 푸시될 때만 이 워크플로를 실행합니다.
+                      # 만약 사용하시는 기본 브랜치 이름이 다르다면 (예: master), 해당 이름으로 변경해주세요.
+  # pull_request:
+  #   branches: [ main ] # main 브랜치로의 풀 리퀘스트가 생성될 때도 실행 (선택 사항)
+
+# 2. 워크플로에서 실행될 작업(들) 정의
+jobs:
+  build-and-push-images: # 작업 ID (원하는 이름으로 지정 가능)
+    name: Build and Push Docker Images to ECR # 작업 이름 (GitHub Actions UI에 표시됨)
+    runs-on: ubuntu-latest # 작업이 실행될 가상 환경 지정 (ubuntu 최신 버전 사용)
+
+    # 3. 작업 단계(steps) 정의
+    steps:
+      # 3-1: 리포지토리 코드 체크아웃
+      - name: Checkout code
+        uses: actions/checkout@v4 # GitHub Actions 마켓플레이스의 'checkout' 액션 사용 (v4는 예시, 최신 안정 버전 확인 권장)
+
+      # 3-2: AWS 자격 증명 설정
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4 # AWS의 'configure-aws-credentials' 액션 사용
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # 3-3: Amazon ECR에 로그인
+      - name: Login to Amazon ECR
+        id: login-ecr # 이 단계의 ID (나중에 결과값을 참조할 때 사용 가능)
+        uses: aws-actions/amazon-ecr-login@v2 # AWS의 'amazon-ecr-login' 액션 사용
+
+      # 3-4: Docker 이미지 태그 및 ECR URI 환경 변수 설정
+      #       (login-ecr 액션의 출력을 사용하여 ECR 레지스트리 URI를 가져오거나, secrets.ECR_REGISTRY를 사용해도 됩니다.)
+      - name: Set image details
+        id: image_details
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }} # login-ecr 단계에서 얻은 레지스트리 URI
+          # 또는 직접 설정한 Secret 사용: ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+          ECR_REPOSITORY_BACKEND: ${{ secrets.ECR_REPOSITORY_BACKEND }}
+          ECR_REPOSITORY_FRONTEND: ${{ secrets.ECR_REPOSITORY_FRONTEND }}
+          IMAGE_TAG_LATEST: latest
+          IMAGE_TAG_COMMIT: ${{ github.sha }} # 전체 커밋 SHA 사용 (또는 일부만 잘라서 사용 가능)
+        run: |
+          # GitHub Actions 환경 변수로 설정하여 이후 단계에서 사용
+          echo "BACKEND_IMAGE_LATEST=${ECR_REGISTRY}/${ECR_REPOSITORY_BACKEND}:${IMAGE_TAG_LATEST}" >> $GITHUB_ENV
+          echo "BACKEND_IMAGE_COMMIT=${ECR_REGISTRY}/${ECR_REPOSITORY_BACKEND}:${IMAGE_TAG_COMMIT:0:7}" >> $GITHUB_ENV # 커밋 SHA 앞 7자리만 사용
+          echo "FRONTEND_IMAGE_LATEST=${ECR_REGISTRY}/${ECR_REPOSITORY_FRONTEND}:${IMAGE_TAG_LATEST}" >> $GITHUB_ENV
+          echo "FRONTEND_IMAGE_COMMIT=${ECR_REGISTRY}/${ECR_REPOSITORY_FRONTEND}:${IMAGE_TAG_COMMIT:0:7}" >> $GITHUB_ENV
+
+      # 3-5: 백엔드 Docker 이미지 빌드, 태그 지정 및 ECR로 푸시
+      - name: Build, tag, and push backend image to Amazon ECR
+        run: |
+          docker build -t ${{ env.BACKEND_IMAGE_LATEST }} -t ${{ env.BACKEND_IMAGE_COMMIT }} ./backend
+          docker push ${{ env.BACKEND_IMAGE_LATEST }}
+          docker push ${{ env.BACKEND_IMAGE_COMMIT }}
+
+      # 3-6: 프론트엔드 Docker 이미지 빌드, 태그 지정 및 ECR로 푸시
+      - name: Build, tag, and push frontend image to Amazon ECR
+        run: |
+          docker build -t ${{ env.FRONTEND_IMAGE_LATEST }} -t ${{ env.FRONTEND_IMAGE_COMMIT }} ./frontend
+          docker push ${{ env.FRONTEND_IMAGE_LATEST }}
+          docker push ${{ env.FRONTEND_IMAGE_COMMIT }}
