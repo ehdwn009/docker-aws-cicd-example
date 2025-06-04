@@ -133,8 +133,6 @@ jobs:
             cd ${{ env.APP_DIR }}
 
             # EC2 인스턴스에서 사용할 docker-compose.yml 파일 생성 또는 업데이트
-            # GitHub Actions 표현식 (${{ ... }})은 이 스크립트 문자열에 전달되기 전에 값으로 치환됩니다.
-            # 셸 변수($...)는 EC2에서 스크립트 실행 시점에 확장됩니다.
             # 여기서는 GitHub Actions 표현식을 사용하여 이미지 URI를 직접 삽입합니다.
             echo 'version: "3.8" # 또는 이 줄 삭제
             services:
