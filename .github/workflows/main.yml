@@ -11,13 +11,13 @@ jobs:
     name: Build and Push Docker Images to ECR
     runs-on: ubuntu-latest
     outputs:
-      # URI 구성 요소들을 개별적으로 출력합니다.
-      ecr_registry: ${{ steps.image_details.outputs.ECR_REGISTRY_OUTPUT }}
-      backend_repo_name: ${{ steps.image_details.outputs.BACKEND_REPO_NAME_OUTPUT }}
-      frontend_repo_name: ${{ steps.image_details.outputs.FRONTEND_REPO_NAME_OUTPUT }}
-      image_tag_latest: ${{ steps.image_details.outputs.IMAGE_TAG_LATEST_OUTPUT }}
-      image_tag_commit: ${{ steps.image_details.outputs.IMAGE_TAG_COMMIT_OUTPUT }}
-      simple_test_passed: ${{ steps.image_details.outputs.MY_SIMPLE_TEST_OUTPUT }}
+      # URI 구성 요소들을 개별적으로 소문자_언더스코어_키로 출력합니다.
+      out_ecr_registry: ${{ steps.image_details.outputs.ecr_registry_key }}
+      out_backend_repo_name: ${{ steps.image_details.outputs.backend_repo_name_key }}
+      out_frontend_repo_name: ${{ steps.image_details.outputs.frontend_repo_name_key }}
+      out_image_tag_latest: ${{ steps.image_details.outputs.image_tag_latest_key }}
+      out_image_tag_commit: ${{ steps.image_details.outputs.image_tag_commit_key }}
+      out_simple_test_passed: ${{ steps.image_details.outputs.my_simple_test_key }}
 
     steps:
       - name: Checkout code
@@ -58,13 +58,13 @@ jobs:
           echo "Debug - IMAGE_TAG_LATEST_ENV is: ${IMAGE_TAG_LATEST_ENV}"
           echo "Debug - COMMIT_SHA_SHORT for tag is: ${COMMIT_SHA_SHORT}"
           
-          # 다른 작업으로 전달될 출력값 설정 (개별 구성 요소)
-          echo "ECR_REGISTRY_OUTPUT=${ECR_REGISTRY_ENV}" >> $GITHUB_OUTPUT
-          echo "BACKEND_REPO_NAME_OUTPUT=${ECR_REPOSITORY_BACKEND_ENV}" >> $GITHUB_OUTPUT
-          echo "FRONTEND_REPO_NAME_OUTPUT=${ECR_REPOSITORY_FRONTEND_ENV}" >> $GITHUB_OUTPUT
-          echo "IMAGE_TAG_LATEST_OUTPUT=${IMAGE_TAG_LATEST_ENV}" >> $GITHUB_OUTPUT
-          echo "IMAGE_TAG_COMMIT_OUTPUT=${COMMIT_SHA_SHORT}" >> $GITHUB_OUTPUT # 짧은 커밋 SHA만 전달
-          echo "MY_SIMPLE_TEST_OUTPUT=HelloFromJob1" >> $GITHUB_OUTPUT
+          # 다른 작업으로 전달될 출력값 설정 (키 이름을 소문자_언더스코어_key 형태로 변경)
+          echo "ecr_registry_key=${ECR_REGISTRY_ENV}" >> $GITHUB_OUTPUT
+          echo "backend_repo_name_key=${ECR_REPOSITORY_BACKEND_ENV}" >> $GITHUB_OUTPUT
+          echo "frontend_repo_name_key=${ECR_REPOSITORY_FRONTEND_ENV}" >> $GITHUB_OUTPUT
+          echo "image_tag_latest_key=${IMAGE_TAG_LATEST_ENV}" >> $GITHUB_OUTPUT
+          echo "image_tag_commit_key=${COMMIT_SHA_SHORT}" >> $GITHUB_OUTPUT
+          echo "my_simple_test_key=HelloFromJob1" >> $GITHUB_OUTPUT
           
           echo "--- Content of GITHUB_OUTPUT file ---"
           cat $GITHUB_OUTPUT
@@ -87,12 +87,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: build-and-push-images
     env: 
-      # 이전 작업의 개별 출력값을 가져와서 여기서 완전한 URI로 조합
-      PASSED_ECR_REGISTRY: ${{ needs.build-and-push-images.outputs.ecr_registry }}
-      PASSED_BACKEND_REPO_NAME: ${{ needs.build-and-push-images.outputs.backend_repo_name }}
-      PASSED_FRONTEND_REPO_NAME: ${{ needs.build-and-push-images.outputs.frontend_repo_name }}
-      PASSED_IMAGE_TAG_COMMIT: ${{ needs.build-and-push-images.outputs.image_tag_commit }}
-      PASSED_SIMPLE_TEST: ${{ needs.build-and-push-images.outputs.simple_test_passed }}
+      # 이전 작업의 개별 출력값을 가져와서 여기서 완전한 URI로 조합 (키 이름을 소문자_언더스코어로 변경)
+      PASSED_ECR_REGISTRY: ${{ needs.build-and-push-images.outputs.out_ecr_registry }}
+      PASSED_BACKEND_REPO_NAME: ${{ needs.build-and-push-images.outputs.out_backend_repo_name }}
+      PASSED_FRONTEND_REPO_NAME: ${{ needs.build-and-push-images.outputs.out_frontend_repo_name }}
+      PASSED_IMAGE_TAG_COMMIT: ${{ needs.build-and-push-images.outputs.out_image_tag_commit }}
+      PASSED_SIMPLE_TEST: ${{ needs.build-and-push-images.outputs.out_simple_test_passed }}
       
       POSTGRES_USER: exampleuser 
       POSTGRES_PASSWORD: examplepass
@@ -101,9 +101,8 @@ jobs:
 
     steps:
       - name: Construct Full Image URIs and Print for Debugging
-        id: construct_uris # 이 단계에 id 부여
+        id: construct_uris
         run: |
-          # 전달받은 구성 요소들로 완전한 이미지 URI를 여기서 만듭니다.
           FINAL_BACKEND_IMAGE_URI="${{ env.PASSED_ECR_REGISTRY }}/${{ env.PASSED_BACKEND_REPO_NAME }}:${{ env.PASSED_IMAGE_TAG_COMMIT }}"
           FINAL_FRONTEND_IMAGE_URI="${{ env.PASSED_ECR_REGISTRY }}/${{ env.PASSED_FRONTEND_REPO_NAME }}:${{ env.PASSED_IMAGE_TAG_COMMIT }}"
           
@@ -111,48 +110,32 @@ jobs:
           echo "Constructed - Frontend Image URI: ${FINAL_FRONTEND_IMAGE_URI}"
           echo "Received for deploy - Simple Test Value: ${{ env.PASSED_SIMPLE_TEST }}"
           
-          # 이 작업 내의 후속 단계에서 사용할 수 있도록 환경 변수로 설정
           echo "FINAL_BACKEND_URI_ENV=${FINAL_BACKEND_IMAGE_URI}" >> $GITHUB_ENV
           echo "FINAL_FRONTEND_URI_ENV=${FINAL_FRONTEND_IMAGE_URI}" >> $GITHUB_ENV
 
       - name: Deploy to EC2 server using SSH
-        uses: appleboy/ssh-action@v1.0.3
+        uses: appleboy/ssh-action@v1.0.3 # 또는 사용하시던 안정적인 최신 버전
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
           debug: true
-          # 스크립트 내에서 사용할 환경 변수를 명시적으로 전달 (선택 사항, 보통은 job의 env가 전달됨)
-          # env: |
-          #   PASSED_BACKEND_IMAGE_URI=${{ env.FINAL_BACKEND_URI_ENV }}
-          #   PASSED_FRONTEND_IMAGE_URI=${{ env.FINAL_FRONTEND_URI_ENV }}
-          #   PASSED_SIMPLE_TEST=${{ env.PASSED_SIMPLE_TEST }}
-          #   APP_DIR=${{ env.APP_DIR }}
-          #   POSTGRES_USER=${{ env.POSTGRES_USER }}
-          #   POSTGRES_PASSWORD=${{ env.POSTGRES_PASSWORD }}
-          #   POSTGRES_DB=${{ env.POSTGRES_DB }}
           script: |
-            # 이제 FINAL_BACKEND_URI_ENV 와 FINAL_FRONTEND_URI_ENV 를 사용합니다.
-            # 또는 appleboy/ssh-action이 job의 env를 자동으로 전달해주므로 그냥 $FINAL_BACKEND_URI_ENV 사용 가능.
-            # 여기서는 명확성을 위해 GitHub Actions 표현식으로 바로 값을 넣습니다.
-            # (주의: 아래 ${{ env.FINAL_BACKEND_URI_ENV }}는 이 스크립트가 GitHub Actions에 의해
-            #  처리될 때 값으로 치환됩니다. EC2의 셸 변수가 아닙니다.)
-
             echo "--- Environment variables available in SSH script ---"
             echo "Final Backend Image URI for docker-compose: ${{ env.FINAL_BACKEND_URI_ENV }}"
             echo "Final Frontend Image URI for docker-compose: ${{ env.FINAL_FRONTEND_URI_ENV }}"
-            echo "Simple Test is: ${{ env.PASSED_SIMPLE_TEST }}" # 이전과 동일
-            echo "APP_DIR is: ${{ env.APP_DIR }}" # 이전과 동일
+            echo "Simple Test is: ${{ env.PASSED_SIMPLE_TEST }}"
+            echo "APP_DIR is: ${{ env.APP_DIR }}"
             echo "-----------------------------------------------------"
 
             mkdir -p ${{ env.APP_DIR }}
             cd ${{ env.APP_DIR }}
 
-            echo 'version: "3.8"
+            echo 'version: "3.8" # 또는 이 줄 삭제
             services:
               backend:
-                image: ${{ env.FINAL_BACKEND_URI_ENV }} # 여기서 최종 조합된 URI 사용
+                image: ${{ env.FINAL_BACKEND_URI_ENV }}
                 ports:
                   - "3001:3001"
                 environment:
@@ -165,7 +148,7 @@ jobs:
                 depends_on:
                   - db
               frontend:
-                image: ${{ env.FINAL_FRONTEND_URI_ENV }} # 여기서 최종 조합된 URI 사용
+                image: ${{ env.FINAL_FRONTEND_URI_ENV }}
                 ports:
                   - "80:80" 
                 depends_on:
