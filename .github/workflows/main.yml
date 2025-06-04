@@ -11,10 +11,10 @@ jobs:
     name: Build and Push Docker Images to ECR
     runs-on: ubuntu-latest
     outputs: # 이 작업의 출력값을 정의하여 다음 작업에서 사용할 수 있도록 합니다.
-      backend_image_latest: ${{ steps.image_details.outputs.BACKEND_IMAGE_LATEST_ENV }}
-      backend_image_commit: ${{ steps.image_details.outputs.BACKEND_IMAGE_COMMIT_ENV }}
-      frontend_image_latest: ${{ steps.image_details.outputs.FRONTEND_IMAGE_LATEST_ENV }}
-      frontend_image_commit: ${{ steps.image_details.outputs.FRONTEND_IMAGE_COMMIT_ENV }}
+      backend_image_latest: ${{ steps.image_details.outputs.BACKEND_IMAGE_LATEST_OUTPUT }}
+      backend_image_commit: ${{ steps.image_details.outputs.BACKEND_IMAGE_COMMIT_OUTPUT }}
+      frontend_image_latest: ${{ steps.image_details.outputs.FRONTEND_IMAGE_LATEST_OUTPUT }}
+      frontend_image_commit: ${{ steps.image_details.outputs.FRONTEND_IMAGE_COMMIT_OUTPUT }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Set image details and export for other jobs
-        id: image_details # 이 단계의 id
+        id: image_details
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY_BACKEND: ${{ secrets.ECR_REPOSITORY_BACKEND }}
@@ -40,11 +40,12 @@ jobs:
           IMAGE_TAG_COMMIT_SHA: ${{ github.sha }}
         run: |
           COMMIT_SHA_SHORT=$(echo ${IMAGE_TAG_COMMIT_SHA} | cut -c1-7)
+          # For current job's env (이것은 현재 작업 내에서만 유효)
           echo "BACKEND_IMAGE_LATEST_ENV=${ECR_REGISTRY}/${ECR_REPOSITORY_BACKEND}:${IMAGE_TAG_LATEST}" >> $GITHUB_ENV
           echo "BACKEND_IMAGE_COMMIT_ENV=${ECR_REGISTRY}/${ECR_REPOSITORY_BACKEND}:${COMMIT_SHA_SHORT}" >> $GITHUB_ENV
           echo "FRONTEND_IMAGE_LATEST_ENV=${ECR_REGISTRY}/${ECR_REPOSITORY_FRONTEND}:${IMAGE_TAG_LATEST}" >> $GITHUB_ENV
           echo "FRONTEND_IMAGE_COMMIT_ENV=${ECR_REGISTRY}/${ECR_REPOSITORY_FRONTEND}:${COMMIT_SHA_SHORT}" >> $GITHUB_ENV
-          # Set outputs for other jobs
+          # Set outputs for other jobs (이것이 다음 작업으로 전달됨)
           echo "BACKEND_IMAGE_LATEST_OUTPUT=${ECR_REGISTRY}/${ECR_REPOSITORY_BACKEND}:${IMAGE_TAG_LATEST}" >> $GITHUB_OUTPUT
           echo "BACKEND_IMAGE_COMMIT_OUTPUT=${ECR_REGISTRY}/${ECR_REPOSITORY_BACKEND}:${COMMIT_SHA_SHORT}" >> $GITHUB_OUTPUT
           echo "FRONTEND_IMAGE_LATEST_OUTPUT=${ECR_REGISTRY}/${ECR_REPOSITORY_FRONTEND}:${IMAGE_TAG_LATEST}" >> $GITHUB_OUTPUT
@@ -67,58 +68,58 @@ jobs:
   deploy-to-ec2:
     name: Deploy to EC2 Instance
     runs-on: ubuntu-latest
-    needs: build-and-push-images # 'build-and-push-images' 작업이 성공해야 이 작업 실행
+    needs: build-and-push-images
     env: # deploy 작업 전체에서 사용할 환경 변수 설정
       # 이전 작업(build-and-push-images)의 출력값을 가져와 환경 변수로 설정
-      BACKEND_IMAGE_URI: ${{ needs.build-and-push-images.outputs.backend_image_commit }} # 커밋 태그된 이미지를 사용
-      FRONTEND_IMAGE_URI: ${{ needs.build-and-push-images.outputs.frontend_image_commit }} # 커밋 태그된 이미지를 사용
-      # 데이터베이스 환경변수 (로컬 docker-compose.yml과 동일하게 우선 설정, 추후 EC2에서 관리하는 방식으로 개선 가능)
-      POSTGRES_USER: exampleuser
+      # 여기에서 사용하는 이름(예: BACKEND_IMAGE_URI)은 이 deploy-to-ec2 작업 내에서 유효합니다.
+      PASSED_BACKEND_IMAGE_URI: ${{ needs.build-and-push-images.outputs.backend_image_commit }}
+      PASSED_FRONTEND_IMAGE_URI: ${{ needs.build-and-push-images.outputs.frontend_image_commit }}
+      POSTGRES_USER: exampleuser # 로컬 docker-compose.yml과 동일하게 우선 설정
       POSTGRES_PASSWORD: examplepass
       POSTGRES_DB: exampledb
-      APP_DIR: /home/${{ secrets.EC2_USER }}/app # EC2 인스턴스 내 앱 디렉토리 경로
+      APP_DIR: /home/${{ secrets.EC2_USER }}/app
 
     steps:
+      # === 디버깅을 위한 새로운 단계 추가 ===
+      - name: Print Received Image URIs for Debugging
+        run: |
+          echo "Received for deploy - Backend Image URI: ${{ env.PASSED_BACKEND_IMAGE_URI }}"
+          echo "Received for deploy - Frontend Image URI: ${{ env.PASSED_FRONTEND_IMAGE_URI }}"
+
       - name: Deploy to EC2 server using SSH
-        uses: appleboy/ssh-action@v1.0.3 # 기존 버전 유지 또는 최신으로
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22 # 기본값이지만 명시적으로 추가
-          debug: true # ssh-action의 디버그 모드 활성화
-          # script 앞부분에 ssh 옵션을 추가하여 더 자세한 로그 확인 시도
-          # (주의: 아래 script 부분은 기존 것을 유지하고, ssh_options만 추가하거나,
-          #  또는 script 내용이 너무 길다면, ssh_options를 with 블록 최상단에 추가)
-          # ssh_options: "-vvv" # 이 옵션은 appleboy/ssh-action에서 직접 지원하지 않을 수 있습니다.
-                               # 대신 debug: true가 더 유용할 수 있습니다.
+          port: 22
+          debug: true # 디버그 로그는 계속 켜두는 것이 좋습니다.
           script: |
-            # EC2에서 실행할 기존 스크립트 내용
-            echo "Connection test successful. Running deployment script..."
+            echo "EC2 Script - Backend Image URI is: $PASSED_BACKEND_IMAGE_URI" # SSH 스크립트 내에서 환경 변수 사용
+            echo "EC2 Script - Frontend Image URI is: $PASSED_FRONTEND_IMAGE_URI"
+
             mkdir -p ${{ env.APP_DIR }}
             cd ${{ env.APP_DIR }}
 
-            # EC2 인스턴스에서 사용할 docker-compose.yml 파일 생성 또는 업데이트
-            # 주의: 이 docker-compose.yml은 ECR 이미지를 사용하도록 수정됨
             echo 'version: "3.8" # 또는 이 줄 삭제
             services:
               backend:
-                image: ${{ env.BACKEND_IMAGE_URI }}
+                image: ${{ env.PASSED_BACKEND_IMAGE_URI }} # GitHub Actions가 이 부분을 실제 값으로 치환
                 ports:
                   - "3001:3001"
                 environment:
                   NODE_ENV: production
                   DB_USER: ${{ env.POSTGRES_USER }}
-                  DB_HOST: db # Docker Compose 내부 네트워크에서 db 서비스 이름으로 접근
+                  DB_HOST: db
                   DB_NAME: ${{ env.POSTGRES_DB }}
                   DB_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
                   DB_PORT: 5432
                 depends_on:
                   - db
               frontend:
-                image: ${{ env.FRONTEND_IMAGE_URI }}
+                image: ${{ env.PASSED_FRONTEND_IMAGE_URI }} # GitHub Actions가 이 부분을 실제 값으로 치환
                 ports:
-                  - "80:80" # 외부에서 80포트로 접속 가능하도록 변경
+                  - "80:80"
                 depends_on:
                   - backend
               db:
@@ -134,15 +135,11 @@ jobs:
                 driver: local
             ' > docker-compose.yml
 
-            # ECR에서 최신 이미지들을 가져옴 (로그인 필요 없음, EC2 인스턴스 역할 또는 이미 구성된 자격 증명 사용 가정)
-            # 만약 EC2 인스턴스에 ECR 접근 권한이 없다면, 여기서 aws ecr get-login-password ... | docker login ... 필요
             echo "Pulling latest images from ECR..."
             docker-compose pull
 
-            # 기존 컨테이너들을 중지하고 삭제한 후, 새로운 이미지로 컨테이너들을 백그라운드에서 실행
             echo "Starting application with new images..."
             docker-compose up -d --remove-orphans
 
-            # (선택 사항) 사용하지 않는 이전 Docker 이미지들 정리
             echo "Cleaning up old Docker images..."
             docker image prune -af
