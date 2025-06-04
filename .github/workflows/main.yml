@@ -80,13 +80,21 @@ jobs:
 
     steps:
       - name: Deploy to EC2 server using SSH
-        uses: appleboy/ssh-action@v1.0.3 # SSH 접속 및 명령어 실행을 위한 액션 (v1.0.3은 예시, 최신 버전 확인)
+        uses: appleboy/ssh-action@v1.0.3 # 기존 버전 유지 또는 최신으로
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22 # 기본값이지만 명시적으로 추가
+          debug: true # ssh-action의 디버그 모드 활성화
+          # script 앞부분에 ssh 옵션을 추가하여 더 자세한 로그 확인 시도
+          # (주의: 아래 script 부분은 기존 것을 유지하고, ssh_options만 추가하거나,
+          #  또는 script 내용이 너무 길다면, ssh_options를 with 블록 최상단에 추가)
+          # ssh_options: "-vvv" # 이 옵션은 appleboy/ssh-action에서 직접 지원하지 않을 수 있습니다.
+                               # 대신 debug: true가 더 유용할 수 있습니다.
           script: |
-            # 애플리케이션 디렉터리가 없으면 생성
+            # EC2에서 실행할 기존 스크립트 내용
+            echo "Connection test successful. Running deployment script..."
             mkdir -p ${{ env.APP_DIR }}
             cd ${{ env.APP_DIR }}
 
