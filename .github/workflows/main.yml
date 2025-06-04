@@ -142,7 +142,8 @@ jobs:
             services:
               backend:
                 image: ${{ env.FINAL_BACKEND_URI_FOR_SCRIPT }}
-                ports: ["3001:3001"]
+                ports:
+                  - "3001:3001" # 수정: 하이픈 뒤 공백 및 따옴표 스타일 통일
                 environment:
                   NODE_ENV: production
                   DB_USER: ${{ env.POSTGRES_USER }}
@@ -150,18 +151,22 @@ jobs:
                   DB_NAME: ${{ env.POSTGRES_DB }}
                   DB_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
                   DB_PORT: 5432
-                depends_on: [- db]
+                depends_on:
+                  - db # 수정: 하이픈 뒤 공백
               frontend:
                 image: ${{ env.FINAL_FRONTEND_URI_FOR_SCRIPT }}
-                ports: ["80:80"] 
-                depends_on: [- backend]
+                ports:
+                  - "80:80" # 수정: 하이픈 뒤 공백 및 따옴표 스타일 통일
+                depends_on:
+                  - backend # 수정: 하이픈 뒤 공백
               db:
                 image: postgres:15-alpine
                 environment:
                   POSTGRES_USER: ${{ env.POSTGRES_USER }}
                   POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
                   POSTGRES_DB: ${{ env.POSTGRES_DB }}
-                volumes: [- postgres_data:/var/lib/postgresql/data]
+                volumes:
+                  - postgres_data:/var/lib/postgresql/data # 수정: 하이픈 뒤 공백
             volumes:
               postgres_data:
                 driver: local
