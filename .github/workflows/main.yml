@@ -4,19 +4,18 @@ name: CI/CD Pipeline - Build, Push to ECR, and Deploy to EC2
 
 on:
   push:
-    branches: [ main ] # 'main' 브랜치에 푸시될 때만 이 워크플로를 실행합니다.
-                      # 만약 사용하시는 기본 브랜치 이름이 다르다면 (예: master), 해당 이름으로 변경해주세요.
+    branches: [ main ]
 
 jobs:
   build-and-push-images:
     name: Build and Push Docker Images to ECR
     runs-on: ubuntu-latest
-    outputs: # 이 작업의 출력값을 정의하여 다음 작업에서 사용할 수 있도록 합니다.
+    outputs:
       backend_image_latest: ${{ steps.image_details.outputs.BACKEND_IMAGE_LATEST_OUTPUT }}
       backend_image_commit: ${{ steps.image_details.outputs.BACKEND_IMAGE_COMMIT_OUTPUT }}
       frontend_image_latest: ${{ steps.image_details.outputs.FRONTEND_IMAGE_LATEST_OUTPUT }}
       frontend_image_commit: ${{ steps.image_details.outputs.FRONTEND_IMAGE_COMMIT_OUTPUT }}
-      simple_test_passed: ${{ steps.image_details.outputs.MY_SIMPLE_TEST_OUTPUT }} # 테스트용 출력 추가
+      simple_test_passed: ${{ steps.image_details.outputs.MY_SIMPLE_TEST_OUTPUT }}
 
     steps:
       - name: Checkout code
@@ -30,50 +29,51 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        id: login-ecr # 이 단계의 ID (나중에 결과값을 참조할 때 사용 가능)
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Set image details and export for other jobs
-        id: image_details # 이 단계의 ID
+        id: image_details
         env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }} # login-ecr 단계에서 얻은 레지스트리 URI
-          ECR_REPOSITORY_BACKEND: ${{ secrets.ECR_REPOSITORY_BACKEND }} # GitHub Secret에서 가져옴
-          ECR_REPOSITORY_FRONTEND: ${{ secrets.ECR_REPOSITORY_FRONTEND }} # GitHub Secret에서 가져옴
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY_BACKEND: ${{ secrets.ECR_REPOSITORY_BACKEND }}
+          ECR_REPOSITORY_FRONTEND: ${{ secrets.ECR_REPOSITORY_FRONTEND }}
           IMAGE_TAG_LATEST: latest
-          IMAGE_TAG_COMMIT_SHA: ${{ github.sha }} # 현재 커밋의 전체 SHA
+          IMAGE_TAG_COMMIT_SHA: ${{ github.sha }}
         run: |
           COMMIT_SHA_SHORT=$(echo ${IMAGE_TAG_COMMIT_SHA} | cut -c1-7)
           
-          # 현재 작업용 환경 변수 설정 (이전과 동일)
           echo "BACKEND_IMAGE_LATEST_ENV=${ECR_REGISTRY}/${ECR_REPOSITORY_BACKEND}:${IMAGE_TAG_LATEST}" >> $GITHUB_ENV
           echo "BACKEND_IMAGE_COMMIT_ENV=${ECR_REGISTRY}/${ECR_REPOSITORY_BACKEND}:${COMMIT_SHA_SHORT}" >> $GITHUB_ENV
           echo "FRONTEND_IMAGE_LATEST_ENV=${ECR_REGISTRY}/${ECR_REPOSITORY_FRONTEND}:${IMAGE_TAG_LATEST}" >> $GITHUB_ENV
           echo "FRONTEND_IMAGE_COMMIT_ENV=${ECR_REGISTRY}/${ECR_REPOSITORY_FRONTEND}:${COMMIT_SHA_SHORT}" >> $GITHUB_ENV
 
-          # === 디버깅 추가: $GITHUB_OUTPUT에 쓰기 전 실제 값 확인 ===
           BACKEND_LATEST_URI_VAL="${ECR_REGISTRY}/${ECR_REPOSITORY_BACKEND}:${IMAGE_TAG_LATEST}"
           BACKEND_COMMIT_URI_VAL="${ECR_REGISTRY}/${ECR_REPOSITORY_BACKEND}:${COMMIT_SHA_SHORT}"
           FRONTEND_LATEST_URI_VAL="${ECR_REGISTRY}/${ECR_REPOSITORY_FRONTEND}:${IMAGE_TAG_LATEST}"
           FRONTEND_COMMIT_URI_VAL="${ECR_REGISTRY}/${ECR_REPOSITORY_FRONTEND}:${COMMIT_SHA_SHORT}"
 
-          echo "Debug - ECR_REGISTRY is: ${ECR_REGISTRY}" # ECR_REGISTRY 값 확인
-          echo "Debug - ECR_REPOSITORY_BACKEND is: ${ECR_REPOSITORY_BACKEND}" # 백엔드 리포 이름 확인
-          echo "Debug - ECR_REPOSITORY_FRONTEND is: ${ECR_REPOSITORY_FRONTEND}" # 프론트엔드 리포 이름 확인
-          echo "Debug - COMMIT_SHA_SHORT is: ${COMMIT_SHA_SHORT}" # 짧은 커밋 SHA 확인
+          echo "Debug - ECR_REGISTRY is: ${ECR_REGISTRY}"
+          echo "Debug - ECR_REPOSITORY_BACKEND is: ${ECR_REPOSITORY_BACKEND}"
+          echo "Debug - ECR_REPOSITORY_FRONTEND is: ${ECR_REPOSITORY_FRONTEND}"
+          echo "Debug - COMMIT_SHA_SHORT is: ${COMMIT_SHA_SHORT}"
 
           echo "Debug - BACKEND_IMAGE_LATEST_OUTPUT will be: $BACKEND_LATEST_URI_VAL"
           echo "Debug - BACKEND_IMAGE_COMMIT_OUTPUT will be: $BACKEND_COMMIT_URI_VAL"
           echo "Debug - FRONTEND_IMAGE_LATEST_OUTPUT will be: $FRONTEND_LATEST_URI_VAL"
           echo "Debug - FRONTEND_IMAGE_COMMIT_OUTPUT will be: $FRONTEND_COMMIT_URI_VAL"
           echo "Debug - Simple test output will be: HelloFromJob1"
-          # === 디버깅 추가 끝 ===
-
-          # 다른 작업으로 전달될 출력값 설정
-          echo "BACKEND_IMAGE_LATEST_OUTPUT=${BACKEND_LATEST_URI_VAL}" >> $GITHUB_OUTPUT
-          echo "BACKEND_IMAGE_COMMIT_OUTPUT=${BACKEND_COMMIT_URI_VAL}" >> $GITHUB_OUTPUT
-          echo "FRONTEND_IMAGE_LATEST_OUTPUT=${FRONTEND_LATEST_URI_VAL}" >> $GITHUB_OUTPUT
-          echo "FRONTEND_IMAGE_COMMIT_OUTPUT=${FRONTEND_COMMIT_URI_VAL}" >> $GITHUB_OUTPUT
-          echo "MY_SIMPLE_TEST_OUTPUT=HelloFromJob1" >> $GITHUB_OUTPUT # 테스트용 간단한 출력 추가
+          
+          # 다른 작업으로 전달될 출력값 설정 (값 부분을 따옴표로 감싸봄)
+          echo "BACKEND_IMAGE_LATEST_OUTPUT=\"${BACKEND_LATEST_URI_VAL}\"" >> $GITHUB_OUTPUT
+          echo "BACKEND_IMAGE_COMMIT_OUTPUT=\"${BACKEND_COMMIT_URI_VAL}\"" >> $GITHUB_OUTPUT
+          echo "FRONTEND_IMAGE_LATEST_OUTPUT=\"${FRONTEND_LATEST_URI_VAL}\"" >> $GITHUB_OUTPUT
+          echo "FRONTEND_IMAGE_COMMIT_OUTPUT=\"${FRONTEND_COMMIT_URI_VAL}\"" >> $GITHUB_OUTPUT
+          echo "MY_SIMPLE_TEST_OUTPUT=\"HelloFromJob1\"" >> $GITHUB_OUTPUT
+          
+          echo "--- Content of GITHUB_OUTPUT file ---"
+          cat $GITHUB_OUTPUT
+          echo "-------------------------------------"
 
       - name: Build, tag, and push backend image to Amazon ECR
         run: |
@@ -87,7 +87,6 @@ jobs:
           docker push ${{ env.FRONTEND_IMAGE_LATEST_ENV }}
           docker push ${{ env.FRONTEND_IMAGE_COMMIT_ENV }}
 
-  # === 새로운 배포 작업 추가 ===
   deploy-to-ec2:
     name: Deploy to EC2 Instance
     runs-on: ubuntu-latest
@@ -95,35 +94,34 @@ jobs:
     env: 
       PASSED_BACKEND_IMAGE_URI: ${{ needs.build-and-push-images.outputs.backend_image_commit }}
       PASSED_FRONTEND_IMAGE_URI: ${{ needs.build-and-push-images.outputs.frontend_image_commit }}
-      PASSED_SIMPLE_TEST: ${{ needs.build-and-push-images.outputs.simple_test_passed }} # 테스트용 환경 변수 추가
-      # EC2 docker-compose.yml에서 사용할 환경 변수들 (Secrets에서 가져오거나 직접 지정)
-      # 아래 값들은 예시이며, 실제로는 GitHub Secrets를 통해 전달받는 것이 더 안전합니다.
-      # (예: POSTGRES_USER: ${{ secrets.DB_USER_FOR_EC2 }} )
-      # 지금은 이전과 동일하게 하드코딩된 예시 값을 사용합니다.
+      PASSED_SIMPLE_TEST: ${{ needs.build-and-push-images.outputs.simple_test_passed }}
       POSTGRES_USER: exampleuser 
       POSTGRES_PASSWORD: examplepass
       POSTGRES_DB: exampledb
-      APP_DIR: /home/${{ secrets.EC2_USER }}/app # secrets.EC2_USER는 GitHub Secret에 저장된 EC2 사용자 이름
+      APP_DIR: /home/${{ secrets.EC2_USER }}/app
 
     steps:
+      - name: Print Entire Needs Context for Debugging
+        run: echo "${{ toJSON(needs) }}"
+
       - name: Print Received Values for Debugging
         run: |
           echo "Received for deploy - Backend Image URI: ${{ env.PASSED_BACKEND_IMAGE_URI }}"
           echo "Received for deploy - Frontend Image URI: ${{ env.PASSED_FRONTEND_IMAGE_URI }}"
-          echo "Received for deploy - Simple Test Value: ${{ env.PASSED_SIMPLE_TEST }}" # 테스트용 값 출력 추가
+          echo "Received for deploy - Simple Test Value: ${{ env.PASSED_SIMPLE_TEST }}"
 
       - name: Deploy to EC2 server using SSH
-        uses: appleboy/ssh-action@v1.0.3 # 또는 다른 안정적인 최신 버전
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          debug: true # 디버그 로그는 계속 켜두는 것이 좋습니다.
+          debug: true
           script: |
             echo "--- Environment variables available in SSH script ---"
-            echo "PASSED_BACKEND_IMAGE_URI is: $PASSED_BACKEND_IMAGE_URI"
-            echo "PASSED_FRONTEND_IMAGE_URI is: $PASSED_FRONTEND_IMAGE_URI"
+            echo "PASSED_BACKEND_IMAGE_URI is: $PASSED_BACKEND_IMAGE_URI" # 셸 변수로 참조
+            echo "PASSED_FRONTEND_IMAGE_URI is: $PASSED_FRONTEND_IMAGE_URI" # 셸 변수로 참조
             echo "PASSED_SIMPLE_TEST is: $PASSED_SIMPLE_TEST"
             echo "APP_DIR is: $APP_DIR"
             echo "POSTGRES_USER is: $POSTGRES_USER"
@@ -132,12 +130,10 @@ jobs:
             mkdir -p ${{ env.APP_DIR }} # GitHub Actions env 변수 사용
             cd ${{ env.APP_DIR }}
 
-            # EC2 인스턴스에서 사용할 docker-compose.yml 파일 생성 또는 업데이트
-            # 여기서는 GitHub Actions 표현식을 사용하여 이미지 URI를 직접 삽입합니다.
             echo 'version: "3.8" # 또는 이 줄 삭제
             services:
               backend:
-                image: ${{ env.PASSED_BACKEND_IMAGE_URI }}
+                image: ${{ env.PASSED_BACKEND_IMAGE_URI }} # GitHub Actions 표현식 사용
                 ports:
                   - "3001:3001"
                 environment:
@@ -150,7 +146,7 @@ jobs:
                 depends_on:
                   - db
               frontend:
-                image: ${{ env.PASSED_FRONTEND_IMAGE_URI }}
+                image: ${{ env.PASSED_FRONTEND_IMAGE_URI }} # GitHub Actions 표현식 사용
                 ports:
                   - "80:80" 
                 depends_on:
