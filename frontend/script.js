@@ -8,7 +8,7 @@ const dataContainer = document.getElementById('dataContainer');
 // 버튼이 클릭되었을 때 실행될 함수를 정의합니다.
 fetchDataButton.addEventListener('click', async () => {
     try {
-        const response = await fetch('http://localhost:3001/api/data');
+        const response = await fetch('http://13.239.225.31:3001/api/data');
 
         // 응답이 성공적이지 않으면 오류를 발생시킵니다.
         if (!response.ok) {
